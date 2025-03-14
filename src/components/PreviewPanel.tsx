@@ -59,6 +59,25 @@ code {
       }
     }
 
+    // Detect frameworks and libraries being used
+    const usesReact = code.includes("import React") || code.includes("react");
+    const usesTailwind =
+      code.includes('className="') &&
+      (code.includes("bg-") || code.includes("text-") || code.includes("flex"));
+    const usesRouter =
+      code.includes("react-router") ||
+      code.includes("Route") ||
+      code.includes("Link");
+    const usesHooks =
+      code.includes("useState") ||
+      code.includes("useEffect") ||
+      code.includes("useContext");
+    const usesTypescript =
+      code.includes(":") &&
+      (code.includes("interface") ||
+        code.includes("type ") ||
+        code.includes(": React."));
+
     // Clean up the React code to make it work in the iframe
     let jsContent = code
       .replace(/import React from ["'](react|react)["'];\n?/g, "")
@@ -67,6 +86,12 @@ code {
       .replace(/import App from ["']\.\/(App|\.\/App)["'];\n?/g, "")
       .replace(/ReactDOM\.createRoot\(.*\)\.render\(.*\);/gs, "")
       .replace(/export default (\w+);/, "const App = $1;");
+
+    // Extract component name if it's not App
+    const componentNameMatch =
+      code.match(/function\s+([A-Z][a-zA-Z0-9]*)\s*\(/) ||
+      code.match(/const\s+([A-Z][a-zA-Z0-9]*)\s*=\s*\(/);
+    const componentName = componentNameMatch ? componentNameMatch[1] : "App";
 
     return `
 <!DOCTYPE html>
@@ -78,18 +103,49 @@ code {
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  ${usesTailwind ? '<script src="https://cdn.tailwindcss.com"></script>' : ""}
+  ${usesRouter ? '<script src="https://unpkg.com/react-router-dom@6/umd/react-router-dom.production.min.js"></script>' : ""}
   <style>
     ${cssContent}
+    /* Base styles for preview */
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    #root {
+      min-height: 100vh;
+    }
+    /* Fallback styles if no CSS is provided */
+    .preview-fallback {
+      padding: 20px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
+    ${usesRouter ? "const { BrowserRouter, Routes, Route, Link, useNavigate, useParams } = ReactRouterDOM;" : ""}
+    ${usesHooks ? "// React hooks are available" : ""}
     ${jsContent}
+    
+    // Detect if the component is exported properly
+    const ComponentToRender = typeof ${componentName} !== 'undefined' ? ${componentName} : App;
+    
+    // Wrap with router if needed
+    const AppWrapper = () => {
+      return (
+        ${
+          usesRouter
+            ? "<BrowserRouter><ComponentToRender /></BrowserRouter>"
+            : "<ComponentToRender />"
+        }
+      );
+    };
     
     ReactDOM.createRoot(document.getElementById('root')).render(
       <React.StrictMode>
-        <App />
+        <AppWrapper />
       </React.StrictMode>
     );
   </script>
@@ -201,7 +257,7 @@ code {
         </div>
       </div>
 
-      <div className="flex-grow relative bg-white">
+      <div className="flex-grow relative bg-white preview-panel">
         {isLoading && (
           <div className="absolute inset-0 bg-blue-950/80 flex items-center justify-center z-10">
             <div className="flex flex-col items-center">

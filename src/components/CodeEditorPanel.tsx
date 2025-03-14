@@ -594,25 +594,146 @@ code {
 
     setTerminalOutput((prev) => [...prev, `$ ${terminalInput}`]);
 
-    // Mock terminal command execution
-    const command = terminalInput.toLowerCase();
+    // Terminal command execution with more comprehensive commands
+    const command = terminalInput.trim();
+    const commandLower = command.toLowerCase();
     let output: string[] = [];
 
-    if (command.startsWith("npm install") || command.startsWith("yarn add")) {
-      output = ["Installing packages...", "Done in 2.3s"];
-    } else if (command.startsWith("npm run") || command.startsWith("yarn")) {
+    // Package management commands
+    if (
+      commandLower.startsWith("npm install") ||
+      commandLower.startsWith("yarn add") ||
+      commandLower.startsWith("pnpm add")
+    ) {
+      const packageName = command.split(" ").slice(2).join(" ");
       output = [
-        "Starting script...",
-        "Server running at http://localhost:3000",
+        `Installing ${packageName || "packages"}...`,
+        "Resolving dependencies...",
+        "Added packages in 2.3s",
+        "Successfully installed packages",
       ];
-    } else if (command === "ls" || command === "dir") {
-      output = fileStructure.map((node) => node.name);
-    } else if (command === "clear" || command === "cls") {
+    }
+    // Run scripts
+    else if (
+      commandLower.startsWith("npm run") ||
+      commandLower.startsWith("yarn") ||
+      commandLower.match(/^(npm|yarn|pnpm) (start|dev|build|test)/)
+    ) {
+      const scriptName =
+        command.split(" ")[1] === "run"
+          ? command.split(" ")[2]
+          : command.split(" ")[1];
+      if (scriptName === "build" || commandLower.includes("build")) {
+        output = [
+          "Building project...",
+          "Compiling...",
+          "Optimizing assets...",
+          "Build completed in 3.2s",
+          "Output directory: ./dist",
+        ];
+      } else {
+        output = [
+          `Running script: ${scriptName || "start"}...`,
+          "Compiled successfully!",
+          "Server running at http://localhost:3000",
+          "Ready for connections",
+        ];
+      }
+    }
+    // File system commands
+    else if (commandLower === "ls" || commandLower === "dir") {
+      // Get current directory contents
+      output = fileStructure.map((node) =>
+        node.type === "folder" ? `📁 ${node.name}/` : `📄 ${node.name}`,
+      );
+    } else if (commandLower.startsWith("cd ")) {
+      const dirName = command.split(" ")[1];
+      if (
+        fileStructure.some(
+          (node) => node.name === dirName && node.type === "folder",
+        )
+      ) {
+        output = [`Changed directory to ${dirName}`];
+      } else {
+        output = [`Directory not found: ${dirName}`];
+      }
+    } else if (commandLower.startsWith("mkdir ")) {
+      const newDirName = command.split(" ")[1];
+      if (newDirName) {
+        // Add new folder to file structure
+        const newFolder: FileNode = {
+          name: newDirName,
+          type: "folder",
+          children: [],
+        };
+        setFileStructure((prev) => [...prev, newFolder]);
+        output = [`Created directory: ${newDirName}`];
+      } else {
+        output = ["Error: Directory name required"];
+      }
+    } else if (
+      commandLower.startsWith("touch ") ||
+      commandLower.startsWith("new ")
+    ) {
+      const newFileName = command.split(" ")[1];
+      if (newFileName) {
+        // Add new file to file structure
+        const extension = newFileName.split(".").pop() || "";
+        const newFile: FileNode = {
+          name: newFileName,
+          type: "file",
+          content: "",
+          language: getLanguageFromExtension(extension),
+        };
+        setFileStructure((prev) => [...prev, newFile]);
+        output = [`Created file: ${newFileName}`];
+      } else {
+        output = ["Error: File name required"];
+      }
+    } else if (commandLower === "clear" || commandLower === "cls") {
       setTerminalOutput(["Терминал очищен"]);
       setTerminalInput("");
       return;
+    }
+    // Git commands
+    else if (commandLower.startsWith("git ")) {
+      const gitCommand = command.split(" ")[1];
+      if (gitCommand === "init") {
+        output = ["Initialized empty Git repository"];
+      } else if (gitCommand === "status") {
+        output = [
+          "On branch main",
+          "Changes not staged for commit:",
+          "  modified: src/App.jsx",
+          "  modified: src/index.css",
+        ];
+      } else if (gitCommand === "add") {
+        output = ["Added files to staging area"];
+      } else if (gitCommand === "commit") {
+        output = ["Created commit: Initial commit"];
+      } else if (gitCommand === "push") {
+        output = ["Pushed changes to remote repository"];
+      } else {
+        output = [`Git command executed: ${gitCommand}`];
+      }
+    }
+    // Help command
+    else if (commandLower === "help") {
+      output = [
+        "Available commands:",
+        "  npm/yarn/pnpm commands - Package management",
+        "  ls/dir - List files",
+        "  cd <dir> - Change directory",
+        "  mkdir <dir> - Create directory",
+        "  touch/new <file> - Create file",
+        "  git <command> - Git operations",
+        "  clear/cls - Clear terminal",
+        "  help - Show this help",
+      ];
     } else {
-      output = [`Command not found: ${terminalInput}`];
+      output = [
+        `Command not found: ${command}. Type 'help' for available commands.`,
+      ];
     }
 
     setTerminalOutput((prev) => [...prev, ...output]);

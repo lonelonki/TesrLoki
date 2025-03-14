@@ -143,9 +143,25 @@ export default function ChatPanel({
       let fileName;
       const fileNameMatch =
         code.match(/^\/\/\s*([\w.-]+\.\w+)/m) ||
-        code.match(/^#\s*([\w.-]+\.\w+)/m);
+        code.match(/^#\s*([\w.-]+\.\w+)/m) ||
+        code.match(/^\s*\/\*\s*([\w.-]+\.\w+)\s*\*\//m);
+
       if (fileNameMatch) {
         fileName = fileNameMatch[1];
+      } else if (language === "jsx" || language === "tsx") {
+        // Try to infer filename from component name for React components
+        const componentNameMatch =
+          code.match(/function\s+([A-Z][\w]+)\s*\(/) ||
+          code.match(/class\s+([A-Z][\w]+)\s+extends/) ||
+          code.match(/const\s+([A-Z][\w]+)\s*=\s*\(/);
+        if (componentNameMatch) {
+          fileName = `${componentNameMatch[1]}.${language}`;
+        }
+      }
+
+      // If we still don't have a filename but have a language, create a generic one
+      if (!fileName && language && language !== "text") {
+        fileName = `code.${language}`;
       }
 
       snippets.push({ code, language, fileName });
@@ -168,14 +184,17 @@ export default function ChatPanel({
         currentCode &&
         (userMessage.toLowerCase().includes("код") ||
           userMessage.toLowerCase().includes("исправ") ||
-          userMessage.toLowerCase().includes("анализ"))
+          userMessage.toLowerCase().includes("анализ") ||
+          userMessage.toLowerCase().includes("добав") ||
+          userMessage.toLowerCase().includes("создай") ||
+          userMessage.toLowerCase().includes("сделай"))
       ) {
         prompt += `\n\nТекущий код (${currentFileName}):\n\`\`\`${currentFileName.split(".").pop()}\n${currentCode}\n\`\`\``;
       }
 
       // Add instruction for code generation
       prompt +=
-        "\n\nЕсли ты генерируешь код, пожалуйста, используй формат ```язык\n// имя_файла.расширение\nкод\n``` чтобы я мог определить язык и имя файла.";
+        "\n\nЕсли ты генерируешь код, пожалуйста, используй формат ```язык\n// имя_файла.расширение\nкод\n``` чтобы я мог определить язык и имя файла. Пожалуйста, предоставь полный код компонента или файла, а не только изменения.";
 
       // Call API
       const aiResponse = await callGeminiAPI(prompt);
@@ -195,6 +214,17 @@ export default function ChatPanel({
 
       // If there are code snippets, pass the first one to the code editor
       if (snippets.length > 0) {
+        // Add visual feedback that code is being applied
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: `Применяю код в редактор: ${snippets[0].fileName || currentFileName}`,
+            timestamp: new Date(),
+          },
+        ]);
+
+        // Apply the code to the editor
         onCodeGenerated(snippets[0].code, snippets[0].fileName);
       }
 
